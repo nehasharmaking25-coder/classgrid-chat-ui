@@ -135,11 +135,15 @@ function AuthForm({ onAuth }) {
         </button>
       </form>
       <p className="auth-toggle">
-        {mode === 'login' ? "Don't have an account?" : 'Already have an account?'}{' '}
-        <button className="link" onClick={() => setMode(mode === 'login' ? 'signup' : 'login')}>
-          {mode === 'login' ? 'Sign up' : 'Log in'}
-        </button>
+        {mode === 'login' ? "Don't have an account?" : 'Already have an account?'}
       </p>
+      <button
+        type="button"
+        className="auth-switch"
+        onClick={() => setMode(mode === 'login' ? 'signup' : 'login')}
+      >
+        {mode === 'login' ? 'Create an account' : 'Log in instead'}
+      </button>
     </div>
   )
 }

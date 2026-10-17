@@ -492,13 +492,21 @@
   margin: 16px 0 0;
 }
 
-.auth-toggle .link {
-  background: none;
-  border: none;
+.auth-switch {
+  width: 100%;
+  margin-top: 10px;
+  padding: 10px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 10px;
   color: var(--accent);
   font-weight: 600;
+  font-size: 14px;
   cursor: pointer;
-  padding: 0;
+}
+
+.auth-switch:hover {
+  background: var(--hover);
 }
 
 /* ---------- Logout ---------- */
