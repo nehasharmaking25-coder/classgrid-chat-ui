@@ -1,29 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
+import { supabase } from './lib/supabase'
 import './App.css'
-
-const FAKE_CONVERSATIONS = [
-  { id: 1, title: 'Explain React hooks' },
-  { id: 2, title: 'Plan my study week' },
-  { id: 3, title: 'Write a birthday wish' },
-  { id: 4, title: 'Summarize a PDF' },
-  { id: 5, title: 'Debug my code' },
-  { id: 6, title: 'Ideas for a project' },
-]
-
-const FAKE_MESSAGES = [
-  { id: 1, role: 'user', text: 'Can you explain React hooks in simple words?' },
-  {
-    id: 2,
-    role: 'assistant',
-    text: 'Sure! Hooks are functions that let you use React features (like state) inside function components. The most common ones are `useState` for values that change, and `useEffect` for running code after render.',
-  },
-  { id: 3, role: 'user', text: 'Give me a tiny example.' },
-  {
-    id: 4,
-    role: 'assistant',
-    text: 'Here you go:\n\n```js\nimport { useState } from "react"\n\nfunction Counter() {\n  const [count, setCount] = useState(0)\n  return <button onClick={() => setCount(count + 1)}>{count}</button>\n}\n```\n\nEvery click adds 1 to the count.',
-  },
-]
 
 const SUGGESTIONS = [
   'Explain quantum computing simply',
@@ -32,7 +9,6 @@ const SUGGESTIONS = [
   'Help me debug an error',
 ]
 
-// We call our own Vercel serverless function, which holds the Groq key server-side.
 const API_URL = '/api/chat'
 
 const MODELS = [
@@ -41,6 +17,28 @@ const MODELS = [
   { id: 'qwen/qwen3.8-27b', label: 'Qwen 3.8 27B' },
   { id: 'allam-2-7b', label: 'Allam 2 7B' },
 ]
+
+function token() {
+  const s = supabase.auth.getSession()
+  return s.then(({ data }) => data.session?.access_token)
+}
+
+async function api(path, options = {}) {
+  const t = await token()
+  const res = await fetch(path, {
+    ...options,
+    headers: {
+      ...(options.headers || {}),
+      ...(t ? { Authorization: `Bearer ${t}` } : {}),
+      'Content-Type': 'application/json',
+    },
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.error || `Request failed: ${res.status}`)
+  }
+  return res.json()
+}
 
 async function askAI(messages, model) {
   const res = await fetch(API_URL, {
@@ -53,7 +51,65 @@ async function askAI(messages, model) {
   return data.reply ?? 'Sorry, I got no reply.'
 }
 
-function Sidebar({ conversations, activeId, onSelect, onNew }) {
+function AuthForm({ onAuth }) {
+  const [mode, setMode] = useState('login')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  const submit = async (e) => {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+
+    const { error: err } =
+      mode === 'login'
+        ? await supabase.auth.signInWithPassword({ email, password })
+        : await supabase.auth.signUp({ email, password })
+
+    setLoading(false)
+    if (err) {
+      setError(err.message)
+    } else {
+      onAuth()
+    }
+  }
+
+  return (
+    <div className="auth-card">
+      <h2>{mode === 'login' ? 'Welcome back' : 'Create account'}</h2>
+      <form onSubmit={submit}>
+        <input
+          type="email"
+          placeholder="Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+        />
+        <input
+          type="password"
+          placeholder="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+        />
+        {error && <p className="auth-error">{error}</p>}
+        <button type="submit" disabled={loading}>
+          {loading ? 'Please wait...' : mode === 'login' ? 'Log in' : 'Sign up'}
+        </button>
+      </form>
+      <p className="auth-toggle">
+        {mode === 'login' ? "Don't have an account?" : 'Already have an account?'}{' '}
+        <button className="link" onClick={() => setMode(mode === 'login' ? 'signup' : 'login')}>
+          {mode === 'login' ? 'Sign up' : 'Log in'}
+        </button>
+      </p>
+    </div>
+  )
+}
+
+function Sidebar({ conversations, activeId, onSelect, onNew, user, onLogout }) {
   return (
     <aside className="sidebar">
       <div className="sidebar-top">
@@ -75,9 +131,10 @@ function Sidebar({ conversations, activeId, onSelect, onNew }) {
       </div>
       <div className="sidebar-bottom">
         <div className="user-chip">
-          <span className="avatar">N</span>
-          <span className="user-name">Neha</span>
+          <span className="avatar">{user?.email?.[0]?.toUpperCase() || 'U'}</span>
+          <span className="user-name">{user?.email || 'User'}</span>
         </div>
+        <button className="logout" onClick={onLogout}>Log out</button>
       </div>
     </aside>
   )
@@ -108,11 +165,7 @@ function ModelPicker({ model, onChange }) {
   return (
     <div className="model-picker">
       <label htmlFor="model-select">Model</label>
-      <select
-        id="model-select"
-        value={model}
-        onChange={(e) => onChange(e.target.value)}
-      >
+      <select id="model-select" value={model} onChange={(e) => onChange(e.target.value)}>
         {MODELS.map((m) => (
           <option key={m.id} value={m.id}>
             {m.label}
@@ -160,55 +213,133 @@ function Composer({ onSend }) {
 }
 
 export default function App() {
-  const [conversations, setConversations] = useState(FAKE_CONVERSATIONS)
-  const [activeId, setActiveId] = useState(1)
-  const [messages, setMessages] = useState(FAKE_MESSAGES)
+  const [user, setUser] = useState(null)
+  const [loadingAuth, setLoadingAuth] = useState(true)
+  const [conversations, setConversations] = useState([])
+  const [activeId, setActiveId] = useState(null)
+  const [messages, setMessages] = useState([])
   const [model, setModel] = useState(MODELS[0].id)
   const endRef = useRef(null)
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setUser(data.session?.user || null)
+      setLoadingAuth(false)
+    })
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user || null)
+    })
+
+    return () => listener.subscription.unsubscribe()
+  }, [])
+
+  useEffect(() => {
+    if (!user) return
+    api('/api/conversations')
+      .then(({ conversations: list }) => {
+        setConversations(list)
+        if (list.length > 0 && !activeId) {
+          setActiveId(list[0].id)
+        }
+      })
+      .catch((err) => console.error('Failed to load conversations', err))
+  }, [user])
+
+  useEffect(() => {
+    if (!activeId) {
+      setMessages([])
+      return
+    }
+    api(`/api/messages?conversation_id=${activeId}`)
+      .then(({ messages: list }) => setMessages(list))
+      .catch((err) => console.error('Failed to load messages', err))
+  }, [activeId])
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  const saveMessage = async (conversationId, role, text) => {
+    try {
+      await api('/api/messages', {
+        method: 'POST',
+        body: JSON.stringify({ conversation_id: conversationId, role, text }),
+      })
+    } catch (err) {
+      console.error('Failed to save message', err)
+    }
+  }
+
+  const ensureConversation = async (text) => {
+    if (activeId) return activeId
+    const title = text.slice(0, 40) + (text.length > 40 ? '...' : '')
+    const { conversation } = await api('/api/conversations', {
+      method: 'POST',
+      body: JSON.stringify({ title, model }),
+    })
+    setConversations((c) => [conversation, ...c])
+    setActiveId(conversation.id)
+    return conversation.id
+  }
+
   const send = async (text) => {
+    const convId = await ensureConversation(text)
+
     const userMsg = { id: Date.now(), role: 'user', text }
     const loadingMsg = { id: Date.now() + 1, role: 'assistant', loading: true }
     setMessages((m) => [...m, userMsg, loadingMsg])
 
-    // Build the conversation history for context.
+    await saveMessage(convId, 'user', text)
+
     const history = [...messages, userMsg]
-      .filter((m) => !m.loading)
+      .filter((m) => !m.loading && m.role && m.text != null)
       .map((m) => ({ role: m.role, content: m.text }))
 
     try {
       const reply = await askAI(history, model)
       setMessages((m) =>
         m.map((msg) =>
-          msg.id === loadingMsg.id
-            ? { ...msg, loading: false, text: reply }
-            : msg,
+          msg.id === loadingMsg.id ? { ...msg, loading: false, text: reply } : msg,
         ),
       )
+      await saveMessage(convId, 'assistant', reply)
     } catch {
+      const errorText = 'Sorry, I could not reach the AI right now. Please try again.'
       setMessages((m) =>
         m.map((msg) =>
-          msg.id === loadingMsg.id
-            ? {
-                ...msg,
-                loading: false,
-                text: 'Sorry, I could not reach the AI right now. Please try again.',
-              }
-            : msg,
+          msg.id === loadingMsg.id ? { ...msg, loading: false, text: errorText } : msg,
         ),
       )
     }
   }
 
   const newChat = () => {
-    const id = Date.now()
-    setConversations((c) => [{ id, title: 'New chat' }, ...c])
-    setActiveId(id)
+    setActiveId(null)
     setMessages([])
+  }
+
+  const logout = async () => {
+    await supabase.auth.signOut()
+    setConversations([])
+    setActiveId(null)
+    setMessages([])
+  }
+
+  if (loadingAuth) {
+    return (
+      <div className="app center">
+        <div className="spinner" />
+      </div>
+    )
+  }
+
+  if (!user) {
+    return (
+      <div className="app center">
+        <AuthForm onAuth={() => supabase.auth.getSession().then(({ data }) => setUser(data.session?.user))} />
+      </div>
+    )
   }
 
   return (
@@ -218,6 +349,8 @@ export default function App() {
         activeId={activeId}
         onSelect={setActiveId}
         onNew={newChat}
+        user={user}
+        onLogout={logout}
       />
       <main className="chat">
         <div className="chat-scroll">
