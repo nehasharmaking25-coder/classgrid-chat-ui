@@ -295,7 +295,11 @@ export default function App() {
   const [messages, setMessages] = useState([])
   const [model, setModel] = useState(MODELS[0].id)
   const [busy, setBusy] = useState(false)
-  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('theme') === 'dark')
+  const [darkMode, setDarkMode] = useState(() => {
+    const saved = localStorage.getItem('theme')
+    if (saved) return saved === 'dark'
+    return window.matchMedia('(prefers-color-scheme: dark)').matches
+  })
   const endRef = useRef(null)
   // Id of a chat we just created while sending: its messages are already on screen,
   // so we must not reload them from the server (that wiped the AI reply).
@@ -307,8 +311,17 @@ export default function App() {
     } else {
       document.documentElement.classList.remove('dark')
     }
-    localStorage.setItem('theme', darkMode ? 'dark' : 'light')
   }, [darkMode])
+
+  // Follow the browser/OS theme automatically until the user picks one manually.
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)')
+    const onChange = (e) => {
+      if (!localStorage.getItem('theme')) setDarkMode(e.matches)
+    }
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
 
   useEffect(() => {
     if (!getToken()) {
@@ -534,7 +547,11 @@ export default function App() {
             <ModelPicker model={model} onChange={setModel} />
             <button
               className="theme-toggle"
-              onClick={() => setDarkMode(!darkMode)}
+              onClick={() => {
+                const next = !darkMode
+                setDarkMode(next)
+                localStorage.setItem('theme', next ? 'dark' : 'light')
+              }}
               title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
             >
               {darkMode ? '☀️' : '🌙'}
