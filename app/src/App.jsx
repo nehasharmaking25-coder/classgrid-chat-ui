@@ -72,6 +72,9 @@ function AuthForm({ onAuth }) {
     if (msg.includes('invalid') && msg.includes('email')) {
       return 'Please enter a valid email address.'
     }
+    if (msg.includes('email not confirmed') || msg.includes('not confirmed')) {
+      return 'Your email is not confirmed yet. Check your inbox for the confirmation link, then log in.'
+    }
     return 'Something went wrong. Please try again.'
   }
 
