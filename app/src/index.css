@@ -1,0 +1,28 @@
+:root {
+  --bg: #ffffff;
+  --sidebar: #f9f9f9;
+  --border: #e4e4e7;
+  --text: #1f1f1f;
+  --muted: #6b6b6b;
+  --accent: #10a37f;
+  --user-bubble: #f4f4f4;
+  --hover: #ececec;
+  font-family: 'DM Sans', 'Sora', system-ui, -apple-system, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root {
+  margin: 0;
+  height: 100%;
+  width: 100%;
+}
+
+body {
+  color: var(--text);
+  background: var(--bg);
+  font-size: 15px;
+  -webkit-font-smoothing: antialiased;
+}
+
+button { font-family: inherit; cursor: pointer; }
