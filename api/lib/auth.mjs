@@ -42,7 +42,7 @@ export async function getUserFromToken(req) {
   const payload = verifyToken(token)
   if (!payload) return null
   const { data, error } = await supabase
-    .from('users')
+    .from('app_users')
     .select('id, name, email, created_at')
     .eq('id', payload.sub)
     .single()

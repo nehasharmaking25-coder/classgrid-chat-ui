@@ -10,8 +10,8 @@ Stop using Supabase's built-in Auth (rate limits, email confirmation) and switch
 
 ## Steps
 1. Database migration `supabase/migrations/002_custom_auth.sql`
-   - Create `public.users` (id UUID PK, name, email UNIQUE, password, created_at)
-   - Repoint `conversations.user_id` FK from `auth.users` to `public.users`
+   - Create `public.app_users` (id UUID PK, name, email UNIQUE, password, created_at)
+   - Repoint `conversations.user_id` FK from `auth.users` to `public.app_users`
    - Drop old `auth.uid()` RLS policies (RLS stays on; service role still works)
 
 2. Backend auth

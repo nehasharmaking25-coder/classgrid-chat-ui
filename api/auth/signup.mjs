@@ -29,7 +29,7 @@ export default async function handler(req, res) {
 
   try {
     const { data: existing } = await supabase
-      .from('users')
+      .from('app_users')
       .select('id')
       .eq('email', normalized)
       .maybeSingle()
@@ -41,7 +41,7 @@ export default async function handler(req, res) {
 
     const hashed = await hashPassword(password)
     const { data, error } = await supabase
-      .from('users')
+      .from('app_users')
       .insert({ name: name || normalized.split('@')[0], email: normalized, password: hashed })
       .select('id, name, email, created_at')
       .single()
