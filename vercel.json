@@ -1,10 +1,5 @@
 {
   "buildCommand": "cd app && npm install && npm run build",
   "outputDirectory": "app/dist",
-  "framework": "vite",
-  "functions": {
-    "app/api/chat.js": {
-      "runtime": "nodejs20.x"
-    }
-  }
+  "framework": "vite"
 }
