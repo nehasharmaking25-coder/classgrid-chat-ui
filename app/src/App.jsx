@@ -20,61 +20,38 @@ const MODELS = [
   { id: 'allam-2-7b', label: 'Allam 2 7B' },
 ]
 
-function copyCode(code) {
-  navigator.clipboard.writeText(code)
-  setCopied(true)
-  setTimeout(() => setCopied(false), 2000)
-}
+// Code block with a working Copy button (used by ReactMarkdown for every ``` block).
+function CodeBlock({ node, children, ...props }) {
+  const preRef = useRef(null)
+  const [copied, setCopied] = useState(false)
 
-// Expose copyCode to window for inline onclick
-window.copyCode = copyCode
-
-async function askAI(messages, model) {
-  const res = await fetch(API_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model, messages }),
-  })
-  if (!res.ok) throw new Error('AI request failed')
-  const data = await res.json()
-  return data.reply ?? 'Sorry, I got no reply.'
-}
-
-async function askAIStream(messages, model, onChunk) {
-  const res = await fetch(API_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model, messages }),
-  })
-  if (!res.ok) throw new Error('AI request failed')
-
-  const reader = res.body.getReader()
-  const decoder = new TextDecoder()
-
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-
-    const chunk = decoder.decode(value, { stream: true })
-    const lines = chunk.split('\n')
-
-    for (const line of lines) {
-      if (line.startsWith('')) {
-        const data = line.slice(6)
-        if (data === '[DONE]') break
-        try {
-          const parsed = JSON.parse(data)
-          const content = parsed.choices?.[0]?.delta?.content || ''
-          if (content) {
-            onChunk(content)
-          }
-        } catch (e) {
-          // Ignore parse errors for partial chunks
-        }
-      }
+  const copy = async () => {
+    const code = preRef.current?.querySelector('code')?.innerText ?? ''
+    try {
+      await navigator.clipboard.writeText(code)
+    } catch {
+      const ta = document.createElement('textarea')
+      ta.value = code
+      document.body.appendChild(ta)
+      ta.select()
+      document.execCommand('copy')
+      ta.remove()
     }
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
   }
+
+  return (
+    <pre ref={preRef} {...props}>
+      <button type="button" className={`copy-btn ${copied ? 'copied' : ''}`} onClick={copy} title="Copy code">
+        {copied ? 'Copied!' : 'Copy'}
+      </button>
+      {children}
+    </pre>
+  )
 }
+
+const MD_COMPONENTS = { pre: CodeBlock }
 
 function AuthForm({ onAuth }) {
   const [mode, setMode] = useState('login')
@@ -211,19 +188,6 @@ function Sidebar({ conversations, activeId, onSelect, onNew, user, onLogout, onD
 
 function Message({ msg }) {
   const isUser = msg.role === 'user'
-  const [copied, setCopied] = useState(false)
-
-  const withCopyButton = (content) => {
-    return content.replace(
-      /<pre><code>(.*?)<\/code><\/pre>/gs,
-      (match, code) => {
-        const displayCode = code.replace(/</g, '&lt;').replace(/>/g, '&gt;')
-        return `<pre><button class="copy-btn" data-code="${code.replace(/`/g, '\`')}" onclick="copyCode(this.dataset.code)" title="Copy code">
-            ${copied ? 'Copied!' : 'Copy'}
-          </button><code>${displayCode}</code></pre>`
-      }
-    )
-  }
 
   return (
     <div className={`msg-row ${isUser ? 'user' : 'assistant'}`}>
@@ -241,7 +205,7 @@ function Message({ msg }) {
             <div className="msg-text">{msg.text}</div>
           ) : (
             <div className="msg-text markdown">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{withCopyButton(msg.text || '')}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>{msg.text || ''}</ReactMarkdown>
             </div>
           )
         )}
@@ -309,7 +273,7 @@ export default function App() {
   const [messages, setMessages] = useState([])
   const [model, setModel] = useState(MODELS[0].id)
   const [busy, setBusy] = useState(false)
-  const [darkMode, setDarkMode] = useState(false)
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('theme') === 'dark')
   const endRef = useRef(null)
   // Id of a chat we just created while sending: its messages are already on screen,
   // so we must not reload them from the server (that wiped the AI reply).
@@ -321,6 +285,7 @@ export default function App() {
     } else {
       document.documentElement.classList.remove('dark')
     }
+    localStorage.setItem('theme', darkMode ? 'dark' : 'light')
   }, [darkMode])
 
   useEffect(() => {
@@ -438,44 +403,26 @@ export default function App() {
 
       if (!res.ok) throw new Error('AI request failed')
 
+      // The server sends plain text pieces. The typing dots stay until the first piece arrives.
       const reader = res.body.getReader()
       const decoder = new TextDecoder()
-
-      setMessages((m) =>
-        m.map((msg) =>
-          msg.id === loadingMsg.id ? { ...msg, loading: false } : msg,
-        ),
-      )
-
       let fullText = ''
+      const show = (text) =>
+        setMessages((m) =>
+          m.map((msg) => (msg.id === loadingMsg.id ? { ...msg, loading: false, text } : msg)),
+        )
+
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
-
         const chunk = decoder.decode(value, { stream: true })
-        const lines = chunk.split('\n')
-
-        for (const line of lines) {
-          if (line.startsWith('')) {
-            const data = line.slice(6)
-            if (data === '[DONE]') break
-            try {
-              const parsed = JSON.parse(data)
-              const content = parsed.choices?.[0]?.delta?.content || ''
-              if (content) {
-                fullText += content
-                setMessages((m) =>
-                  m.map((msg) =>
-                    msg.id === loadingMsg.id ? { ...msg, loading: false, text: fullText } : msg,
-                  ),
-                )
-              }
-            } catch (e) {
-              // Ignore parse errors for partial chunks
-            }
-          }
-        }
+        if (!chunk) continue
+        fullText += chunk
+        show(fullText)
       }
+      fullText += decoder.decode()
+      if (!fullText.trim()) fullText = 'Sorry, I got no reply. Please try again.'
+      show(fullText)
 
       if (convId) await saveMessage(convId, 'assistant', fullText)
     } catch {
@@ -502,6 +449,7 @@ export default function App() {
   }
 
   const deleteChat = async (id) => {
+    if (!window.confirm('Delete this chat? This cannot be undone.')) return
     try {
       await api(`/api/conversations?id=${id}`, { method: 'DELETE' })
       setConversations((c) => c.filter((conv) => conv.id !== id))
@@ -560,11 +508,17 @@ export default function App() {
           <div ref={endRef} />
         </div>
         <div className="composer-wrap">
-          <ModelPicker model={model} onChange={setModel} />
+          <div className="composer-tools">
+            <ModelPicker model={model} onChange={setModel} />
+            <button
+              className="theme-toggle"
+              onClick={() => setDarkMode(!darkMode)}
+              title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              {darkMode ? '☀️' : '🌙'}
+            </button>
+          </div>
           <Composer onSend={send} busy={busy} />
-          <button className="theme-toggle" onClick={() => setDarkMode(!darkMode)}>
-            {darkMode ? '☀️' : '🌙'}
-          </button>
           <p className="disclaimer">Powered by Groq — replies may vary.</p>
         </div>
       </main>

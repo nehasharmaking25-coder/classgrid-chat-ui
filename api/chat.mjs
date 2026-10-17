@@ -53,32 +53,34 @@ export default async function handler(req, res) {
     res.setHeader('Connection', 'keep-alive')
     res.setHeader('X-Accel-Buffering', 'no')
 
+    // Groq sends lines like "data: {json}". We read them, pull out only the
+    // new words, and send plain text to the browser.
     const reader = response.body.getReader()
     const decoder = new TextDecoder()
+    let buffer = ''
+    let finished = false
 
-    while (true) {
+    while (!finished) {
       const { done, value } = await reader.read()
       if (done) break
 
-      const chunk = decoder.decode(value, { stream: true })
-      const lines = chunk.split('\n')
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() // last line may be cut in half: keep it for the next read
 
-      for (const line of lines) {
-        if (line.startsWith('')) {
-          const data = line.slice(6)
-          if (data === '[DONE]') {
-            res.write('')
-            return
-          }
-          try {
-            const parsed = JSON.parse(data)
-            const content = parsed.choices?.[0]?.delta?.content || ''
-            if (content) {
-              res.write(content)
-            }
-          } catch (e) {
-            // Ignore parse errors for partial chunks
-          }
+      for (const raw of lines) {
+        const line = raw.trim()
+        if (!line.startsWith('data:')) continue
+        const data = line.slice(5).trim()
+        if (data === '[DONE]') {
+          finished = true
+          break
+        }
+        try {
+          const content = JSON.parse(data).choices?.[0]?.delta?.content
+          if (content) res.write(content)
+        } catch {
+          // skip a broken line
         }
       }
     }
@@ -89,6 +91,8 @@ export default async function handler(req, res) {
     console.error('Streaming error:', err)
     if (!res.headersSent) {
       res.status(500).json({ error: 'Streaming failed' })
+    } else {
+      res.end()
     }
   }
 }

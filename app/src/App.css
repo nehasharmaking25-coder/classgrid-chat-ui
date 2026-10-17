@@ -195,7 +195,7 @@
   border-radius: 6px;
   font-size: 11px;
   cursor: pointer;
-  opacity: 0;
+  opacity: 0.6;
   transition: opacity 0.2s;
 }
 .markdown pre:hover .copy-btn { opacity: 1; }
@@ -345,6 +345,12 @@
   margin-left: 4px;
 }
 .delete-conv:hover { color: #ef4444; }
+.conv-item-wrapper { display: flex; align-items: center; gap: 2px; }
+.conv-item-wrapper .conv-item { flex: 1; min-width: 0; }
+@media (hover: none) { .delete-conv { opacity: 1; } }
+.composer-tools { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.composer-tools .model-picker { margin-bottom: 0; }
+.theme-toggle { width: 32px; height: 32px; }
 .conv-item-wrapper:hover .delete-conv { opacity: 1; }
 .conv-item-wrapper.active .delete-conv { opacity: 1; }
 .disclaimer {
