@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { api, login, signup, logout, me, setToken, getToken } from './lib/auth'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import './App.css'
 
 const SUGGESTIONS = [
@@ -165,7 +167,13 @@ function Message({ msg }) {
             <span className="dot" />
           </div>
         ) : (
-          <div className="msg-text">{msg.text}</div>
+          isUser ? (
+            <div className="msg-text">{msg.text}</div>
+          ) : (
+            <div className="msg-text markdown">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.text || ''}</ReactMarkdown>
+            </div>
+          )
         )}
       </div>
     </div>
