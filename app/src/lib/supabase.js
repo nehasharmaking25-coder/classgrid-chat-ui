@@ -1,10 +1,2 @@
-import { createClient } from '@supabase/supabase-js'
-
-const url = import.meta.env.VITE_SUPABASE_URL
-const key = import.meta.env.VITE_SUPABASE_ANON_KEY
-
-if (!url || !key) {
-  console.warn('Supabase URL or anon key is missing. Auth and chat saving will not work.')
-}
-
-export const supabase = createClient(url || '', key || '')
+// Supabase Auth has been replaced with custom auth (see app/src/lib/auth.js).
+// This file is no longer used by the app.

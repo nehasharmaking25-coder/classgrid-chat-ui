@@ -1,21 +1,4 @@
-import { createClient } from '@supabase/supabase-js'
-
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY,
-)
-
-function getToken(req) {
-  const auth = req.headers.authorization || ''
-  return auth.startsWith('Bearer ') ? auth.slice(7) : null
-}
-
-async function getUser(token) {
-  if (!token) return null
-  const { data, error } = await supabase.auth.getUser(token)
-  if (error || !data.user) return null
-  return data.user
-}
+import { supabase, getUserFromToken } from './lib/auth.mjs'
 
 async function ownsConversation(userId, conversationId) {
   const { data, error } = await supabase
@@ -37,7 +20,7 @@ export default async function handler(req, res) {
     return
   }
 
-  const user = await getUser(getToken(req))
+  const user = await getUserFromToken(req)
   if (!user) {
     res.status(401).json({ error: 'Unauthorized' })
     return

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { supabase } from './lib/supabase'
+import { api, login, signup, logout, me } from './lib/auth'
 import './App.css'
 
 const SUGGESTIONS = [
@@ -18,28 +18,6 @@ const MODELS = [
   { id: 'allam-2-7b', label: 'Allam 2 7B' },
 ]
 
-function token() {
-  const s = supabase.auth.getSession()
-  return s.then(({ data }) => data.session?.access_token)
-}
-
-async function api(path, options = {}) {
-  const t = await token()
-  const res = await fetch(path, {
-    ...options,
-    headers: {
-      ...(options.headers || {}),
-      ...(t ? { Authorization: `Bearer ${t}` } : {}),
-      'Content-Type': 'application/json',
-    },
-  })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(err.error || `Request failed: ${res.status}`)
-  }
-  return res.json()
-}
-
 async function askAI(messages, model) {
   const res = await fetch(API_URL, {
     method: 'POST',
@@ -53,6 +31,7 @@ async function askAI(messages, model) {
 
 function AuthForm({ onAuth }) {
   const [mode, setMode] = useState('login')
+  const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -60,22 +39,16 @@ function AuthForm({ onAuth }) {
 
   const friendlyError = (err) => {
     const msg = (err?.message || '').toLowerCase()
-    if (err?.status === 429 || msg.includes('rate limit') || msg.includes('too many')) {
-      return 'Too many attempts. Please wait a few minutes and try again.'
-    }
     if (msg.includes('already registered') || msg.includes('already been registered')) {
       return 'This email is already registered. Please log in instead.'
     }
     if (msg.includes('password')) {
       return 'Password must be at least 6 characters.'
     }
-    if (msg.includes('invalid') && msg.includes('email')) {
-      return 'Please enter a valid email address.'
+    if (msg.includes('invalid')) {
+      return 'Invalid email or password.'
     }
-    if (msg.includes('email not confirmed') || msg.includes('not confirmed')) {
-      return 'Your email is not confirmed yet. Check your inbox for the confirmation link, then log in.'
-    }
-    return 'Something went wrong. Please try again.'
+    return err?.message || 'Something went wrong. Please try again.'
   }
 
   const submit = async (e) => {
@@ -86,22 +59,11 @@ function AuthForm({ onAuth }) {
 
     try {
       if (mode === 'login') {
-        const { error: err } = await supabase.auth.signInWithPassword({ email, password })
-        if (err) throw err
-        onAuth()
+        const { token, user } = await login(email, password)
+        onAuth(user)
       } else {
-        const { data, error: err } = await supabase.auth.signUp({
-          email,
-          password,
-          options: { emailRedirectTo: window.location.origin },
-        })
-        if (err) throw err
-        if (!data.session) {
-          setError('Account created. Please check your email to confirm it, then log in.')
-          setMode('login')
-        } else {
-          onAuth()
-        }
+        const { token, user } = await signup(name, email, password)
+        onAuth(user)
       }
     } catch (err) {
       console.error('Auth error:', err)
@@ -115,6 +77,14 @@ function AuthForm({ onAuth }) {
     <div className="auth-card">
       <h2>{mode === 'login' ? 'Welcome back' : 'Create account'}</h2>
       <form onSubmit={submit}>
+        {mode === 'signup' && (
+          <input
+            type="text"
+            placeholder="Name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+        )}
         <input
           type="email"
           placeholder="Email"
@@ -261,16 +231,10 @@ export default function App() {
   const endRef = useRef(null)
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setUser(data.session?.user || null)
-      setLoadingAuth(false)
-    })
-
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user || null)
-    })
-
-    return () => listener.subscription.unsubscribe()
+    me()
+      .then(({ user }) => setUser(user))
+      .catch(() => setUser(null))
+      .finally(() => setLoadingAuth(false))
   }, [])
 
   useEffect(() => {
@@ -358,11 +322,12 @@ export default function App() {
     setMessages([])
   }
 
-  const logout = async () => {
-    await supabase.auth.signOut()
+  const handleLogout = () => {
+    logout()
     setConversations([])
     setActiveId(null)
     setMessages([])
+    setUser(null)
   }
 
   if (loadingAuth) {
@@ -376,7 +341,7 @@ export default function App() {
   if (!user) {
     return (
       <div className="app center">
-        <AuthForm onAuth={() => supabase.auth.getSession().then(({ data }) => setUser(data.session?.user))} />
+        <AuthForm onAuth={(u) => setUser(u)} />
       </div>
     )
   }
@@ -389,7 +354,7 @@ export default function App() {
         onSelect={setActiveId}
         onNew={newChat}
         user={user}
-        onLogout={logout}
+        onLogout={handleLogout}
       />
       <main className="chat">
         <div className="chat-scroll">
