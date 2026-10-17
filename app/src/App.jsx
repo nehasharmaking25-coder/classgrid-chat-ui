@@ -296,7 +296,7 @@ export default function App() {
   const [model, setModel] = useState(MODELS[0].id)
   const [busy, setBusy] = useState(false)
   const [darkMode, setDarkMode] = useState(() => {
-    const saved = localStorage.getItem('theme')
+    const saved = localStorage.getItem('cg-theme')
     if (saved) return saved === 'dark'
     return window.matchMedia('(prefers-color-scheme: dark)').matches
   })
@@ -317,7 +317,7 @@ export default function App() {
   useEffect(() => {
     const mq = window.matchMedia('(prefers-color-scheme: dark)')
     const onChange = (e) => {
-      if (!localStorage.getItem('theme')) setDarkMode(e.matches)
+      if (!localStorage.getItem('cg-theme')) setDarkMode(e.matches)
     }
     mq.addEventListener('change', onChange)
     return () => mq.removeEventListener('change', onChange)
@@ -550,7 +550,7 @@ export default function App() {
               onClick={() => {
                 const next = !darkMode
                 setDarkMode(next)
-                localStorage.setItem('theme', next ? 'dark' : 'light')
+                localStorage.setItem('cg-theme', next ? 'dark' : 'light')
               }}
               title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
             >
