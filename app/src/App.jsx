@@ -32,9 +32,8 @@ const SUGGESTIONS = [
   'Help me debug an error',
 ]
 
-// Groq API (OpenAI-compatible). Key is set as a Vercel env var (VITE_GROQ_API_KEY).
-const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY
-const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
+// We call our own Vercel serverless function, which holds the Groq key server-side.
+const API_URL = '/api/chat'
 
 const MODELS = [
   { id: 'openai/gpt-oss-120b', label: 'GPT-OSS 120B (best)' },
@@ -44,17 +43,14 @@ const MODELS = [
 ]
 
 async function askAI(messages, model) {
-  const res = await fetch(GROQ_URL, {
+  const res = await fetch(API_URL, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${GROQ_API_KEY}`,
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ model, messages }),
   })
   if (!res.ok) throw new Error('AI request failed')
   const data = await res.json()
-  return data.choices?.[0]?.message?.content ?? 'Sorry, I got no reply.'
+  return data.reply ?? 'Sorry, I got no reply.'
 }
 
 function Sidebar({ conversations, activeId, onSelect, onNew }) {
