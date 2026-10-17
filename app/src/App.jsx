@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { api, login, signup, logout, me } from './lib/auth'
+import { api, login, signup, logout, me, setToken, getToken } from './lib/auth'
 import './App.css'
 
 const SUGGESTIONS = [
@@ -60,9 +60,11 @@ function AuthForm({ onAuth }) {
     try {
       if (mode === 'login') {
         const { token, user } = await login(email, password)
+        setToken(token)
         onAuth(user)
       } else {
         const { token, user } = await signup(name, email, password)
+        setToken(token)
         onAuth(user)
       }
     } catch (err) {
@@ -231,9 +233,16 @@ export default function App() {
   const endRef = useRef(null)
 
   useEffect(() => {
+    if (!getToken()) {
+      setLoadingAuth(false)
+      return
+    }
     me()
       .then(({ user }) => setUser(user))
-      .catch(() => setUser(null))
+      .catch(() => {
+        logout()
+        setUser(null)
+      })
       .finally(() => setLoadingAuth(false))
   }, [])
 
@@ -287,13 +296,22 @@ export default function App() {
   }
 
   const send = async (text) => {
-    const convId = await ensureConversation(text)
-
     const userMsg = { id: Date.now(), role: 'user', text }
     const loadingMsg = { id: Date.now() + 1, role: 'assistant', loading: true }
     setMessages((m) => [...m, userMsg, loadingMsg])
 
-    await saveMessage(convId, 'user', text)
+    let convId = null
+    try {
+      convId = await ensureConversation(text)
+    } catch (err) {
+      console.error('Failed to create conversation', err)
+      if (String(err.message).includes('Unauthorized')) {
+        handleLogout()
+        return
+      }
+    }
+
+    if (convId) await saveMessage(convId, 'user', text)
 
     const history = [...messages, userMsg]
       .filter((m) => !m.loading && m.role && m.text != null)
@@ -306,7 +324,7 @@ export default function App() {
           msg.id === loadingMsg.id ? { ...msg, loading: false, text: reply } : msg,
         ),
       )
-      await saveMessage(convId, 'assistant', reply)
+      if (convId) await saveMessage(convId, 'assistant', reply)
     } catch {
       const errorText = 'Sorry, I could not reach the AI right now. Please try again.'
       setMessages((m) =>
