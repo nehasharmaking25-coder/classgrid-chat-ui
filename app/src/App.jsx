@@ -187,13 +187,13 @@ function ModelPicker({ model, onChange }) {
   )
 }
 
-function Composer({ onSend }) {
+function Composer({ onSend, busy }) {
   const [value, setValue] = useState('')
   const ref = useRef(null)
 
   const submit = () => {
     const text = value.trim()
-    if (!text) return
+    if (!text || busy) return
     onSend(text)
     setValue('')
     ref.current?.focus()
@@ -216,7 +216,7 @@ function Composer({ onSend }) {
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={onKeyDown}
       />
-      <button className="send" onClick={submit} disabled={!value.trim()}>
+      <button className="send" onClick={submit} disabled={!value.trim() || busy}>
         ↑
       </button>
     </div>
@@ -230,7 +230,11 @@ export default function App() {
   const [activeId, setActiveId] = useState(null)
   const [messages, setMessages] = useState([])
   const [model, setModel] = useState(MODELS[0].id)
+  const [busy, setBusy] = useState(false)
   const endRef = useRef(null)
+  // Id of a chat we just created while sending: its messages are already on screen,
+  // so we must not reload them from the server (that wiped the AI reply).
+  const justCreatedRef = useRef(null)
 
   useEffect(() => {
     if (!getToken()) {
@@ -263,9 +267,19 @@ export default function App() {
       setMessages([])
       return
     }
+    if (justCreatedRef.current === activeId) {
+      justCreatedRef.current = null
+      return
+    }
+    let cancelled = false
     api(`/api/messages?conversation_id=${activeId}`)
-      .then(({ messages: list }) => setMessages(list))
+      .then(({ messages: list }) => {
+        if (!cancelled) setMessages(list)
+      })
       .catch((err) => console.error('Failed to load messages', err))
+    return () => {
+      cancelled = true
+    }
   }, [activeId])
 
   useEffect(() => {
@@ -291,11 +305,22 @@ export default function App() {
       body: JSON.stringify({ title, model }),
     })
     setConversations((c) => [conversation, ...c])
+    justCreatedRef.current = conversation.id
     setActiveId(conversation.id)
     return conversation.id
   }
 
   const send = async (text) => {
+    if (busy) return
+    setBusy(true)
+    try {
+      await sendInner(text)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const sendInner = async (text) => {
     const userMsg = { id: Date.now(), role: 'user', text }
     const loadingMsg = { id: Date.now() + 1, role: 'assistant', loading: true }
     setMessages((m) => [...m, userMsg, loadingMsg])
@@ -394,7 +419,7 @@ export default function App() {
         </div>
         <div className="composer-wrap">
           <ModelPicker model={model} onChange={setModel} />
-          <Composer onSend={send} />
+          <Composer onSend={send} busy={busy} />
           <p className="disclaimer">Powered by Groq — replies may vary.</p>
         </div>
       </main>
