@@ -58,21 +58,53 @@ function AuthForm({ onAuth }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  const friendlyError = (err) => {
+    const msg = (err?.message || '').toLowerCase()
+    if (err?.status === 429 || msg.includes('rate limit') || msg.includes('too many')) {
+      return 'Too many attempts. Please wait a few minutes and try again.'
+    }
+    if (msg.includes('already registered') || msg.includes('already been registered')) {
+      return 'This email is already registered. Please log in instead.'
+    }
+    if (msg.includes('password')) {
+      return 'Password must be at least 6 characters.'
+    }
+    if (msg.includes('invalid') && msg.includes('email')) {
+      return 'Please enter a valid email address.'
+    }
+    return 'Something went wrong. Please try again.'
+  }
+
   const submit = async (e) => {
     e.preventDefault()
+    if (loading) return
     setLoading(true)
     setError('')
 
-    const { error: err } =
-      mode === 'login'
-        ? await supabase.auth.signInWithPassword({ email, password })
-        : await supabase.auth.signUp({ email, password })
-
-    setLoading(false)
-    if (err) {
-      setError(err.message)
-    } else {
-      onAuth()
+    try {
+      if (mode === 'login') {
+        const { error: err } = await supabase.auth.signInWithPassword({ email, password })
+        if (err) throw err
+        onAuth()
+      } else {
+        const { data, error: err } = await supabase.auth.signUp({
+          email,
+          password,
+          options: { emailRedirectTo: window.location.origin },
+        })
+        if (err) throw err
+        if (!data.session) {
+          setError('Account created. Please check your email to confirm it, then log in.')
+          setMode('login')
+        } else {
+          onAuth()
+        }
+      }
+    } catch (err) {
+      console.error('Auth error:', err)
+      setError(friendlyError(err))
+    } finally {
+      setLoading(false)
     }
   }
 
