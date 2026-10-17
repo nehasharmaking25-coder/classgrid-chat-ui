@@ -1,0 +1,7 @@
+# Downloaded source bundle + findings (contains a public Supabase anon key — do not publish)
+study/
+proof.png
+
+# Dependencies and build output
+node_modules/
+dist/
