@@ -38,3 +38,5 @@ export default async function handler(req, res) {
     res.status(502).json({ error: 'AI request failed' })
   }
 }
+
+// Redeploy trigger: this comment change starts a new Vercel build.
