@@ -182,8 +182,25 @@
 .markdown blockquote { margin: 0 0 10px; padding: 2px 14px; border-left: 3px solid #d0d0d0; color: #555; }
 .markdown hr { border: none; border-top: 1px solid #e5e5e5; margin: 16px 0; }
 .markdown code { background: #f0f0f0; padding: 2px 6px; border-radius: 6px; font-size: 0.9em; font-family: ui-monospace, Menlo, Consolas, monospace; }
-.markdown pre { background: #1f1f1f; color: #f5f5f5; padding: 14px 16px; border-radius: 12px; overflow-x: auto; margin: 0 0 12px; }
+.markdown pre { background: #1f1f1f; color: #f5f5f5; padding: 14px 16px; border-radius: 12px; overflow-x: auto; margin: 0 0 12px; position: relative; }
 .markdown pre code { background: none; padding: 0; color: inherit; font-size: 13.5px; }
+.markdown pre .copy-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: #fff;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.markdown pre:hover .copy-btn { opacity: 1; }
+.markdown pre .copy-btn:hover { background: rgba(255, 255, 255, 0.2); }
+.markdown pre .copy-btn.copied { background: var(--accent); }
 .markdown table { border-collapse: collapse; margin: 0 0 12px; display: block; overflow-x: auto; max-width: 100%; }
 .markdown th, .markdown td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
 .markdown th { background: #f6f6f6; font-weight: 700; }
@@ -208,6 +225,33 @@
   0%, 80%, 100% { opacity: 0.25; }
   40% { opacity: 1; }
 }
+
+/* Dark mode */
+.dark {
+  --bg: #0f0f11;
+  --sidebar: #18181b;
+  --border: #27272a;
+  --text: #f4f4f5;
+  --muted: #a1a1aa;
+  --accent: #10a37f;
+  --user-bubble: #18181b;
+  --hover: #27272a;
+}
+.dark .new-chat { background: #27272a; }
+.dark .conv-item.active { background: #27272a; }
+.dark .suggestion { background: #27272a; }
+.dark .composer { background: #27272a; }
+.dark .model-picker select { background: #27272a; }
+.dark .auth-box { background: #18181b; }
+.dark .auth-tabs button.active { background: #27272a; }
+.dark .auth-tabs button { background: #18181b; }
+.dark .markdown code { background: #3f3f46; }
+.dark .markdown a { color: #60a5fa; }
+.dark .markdown blockquote { border-left-color: #3f3f46; color: #a1a1aa; }
+.dark .markdown hr { border-top-color: #3f3f46; }
+.dark .markdown th { background: #27272a; }
+.dark .markdown table { border-color: #3f3f46; }
+.dark .markdown th, .dark .markdown td { border-color: #3f3f46; }
 
 /* ---------- Model picker ---------- */
 .model-picker {
@@ -271,6 +315,38 @@
   justify-content: center;
 }
 .send:disabled { background: #d1d1d1; cursor: not-allowed; }
+.theme-toggle {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+.theme-toggle:hover { background: var(--hover); }
+.dark .theme-toggle { background: #27272a; }
+.delete-conv {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s, color 0.2s;
+  margin-left: 4px;
+}
+.delete-conv:hover { color: #ef4444; }
+.conv-item-wrapper:hover .delete-conv { opacity: 1; }
+.conv-item-wrapper.active .delete-conv { opacity: 1; }
 .disclaimer {
   text-align: center;
   font-size: 12px;

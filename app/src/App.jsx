@@ -20,6 +20,15 @@ const MODELS = [
   { id: 'allam-2-7b', label: 'Allam 2 7B' },
 ]
 
+function copyCode(code) {
+  navigator.clipboard.writeText(code)
+  setCopied(true)
+  setTimeout(() => setCopied(false), 2000)
+}
+
+// Expose copyCode to window for inline onclick
+window.copyCode = copyCode
+
 async function askAI(messages, model) {
   const res = await fetch(API_URL, {
     method: 'POST',
@@ -29,6 +38,42 @@ async function askAI(messages, model) {
   if (!res.ok) throw new Error('AI request failed')
   const data = await res.json()
   return data.reply ?? 'Sorry, I got no reply.'
+}
+
+async function askAIStream(messages, model, onChunk) {
+  const res = await fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model, messages }),
+  })
+  if (!res.ok) throw new Error('AI request failed')
+
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+
+    const chunk = decoder.decode(value, { stream: true })
+    const lines = chunk.split('\n')
+
+    for (const line of lines) {
+      if (line.startsWith('')) {
+        const data = line.slice(6)
+        if (data === '[DONE]') break
+        try {
+          const parsed = JSON.parse(data)
+          const content = parsed.choices?.[0]?.delta?.content || ''
+          if (content) {
+            onChunk(content)
+          }
+        } catch (e) {
+          // Ignore parse errors for partial chunks
+        }
+      }
+    }
+  }
 }
 
 function AuthForm({ onAuth }) {
@@ -122,7 +167,7 @@ function AuthForm({ onAuth }) {
   )
 }
 
-function Sidebar({ conversations, activeId, onSelect, onNew, user, onLogout }) {
+function Sidebar({ conversations, activeId, onSelect, onNew, user, onLogout, onDelete }) {
   return (
     <aside className="sidebar">
       <div className="sidebar-top">
@@ -132,14 +177,25 @@ function Sidebar({ conversations, activeId, onSelect, onNew, user, onLogout }) {
       </div>
       <div className="conv-list">
         {conversations.map((c) => (
-          <button
-            key={c.id}
-            className={`conv-item ${c.id === activeId ? 'active' : ''}`}
-            onClick={() => onSelect(c.id)}
-          >
-            <span className="conv-icon">💬</span>
-            <span className="conv-title">{c.title}</span>
-          </button>
+          <div key={c.id} className={`conv-item-wrapper ${c.id === activeId ? 'active' : ''}`}>
+            <button
+              className={`conv-item ${c.id === activeId ? 'active' : ''}`}
+              onClick={() => onSelect(c.id)}
+            >
+              <span className="conv-icon">💬</span>
+              <span className="conv-title">{c.title}</span>
+            </button>
+            <button
+              className="delete-conv"
+              onClick={(e) => {
+                e.stopPropagation()
+                onDelete(c.id)
+              }}
+              title="Delete chat"
+            >
+              🗑️
+            </button>
+          </div>
         ))}
       </div>
       <div className="sidebar-bottom">
@@ -155,6 +211,20 @@ function Sidebar({ conversations, activeId, onSelect, onNew, user, onLogout }) {
 
 function Message({ msg }) {
   const isUser = msg.role === 'user'
+  const [copied, setCopied] = useState(false)
+
+  const withCopyButton = (content) => {
+    return content.replace(
+      /<pre><code>(.*?)<\/code><\/pre>/gs,
+      (match, code) => {
+        const displayCode = code.replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        return `<pre><button class="copy-btn" data-code="${code.replace(/`/g, '\`')}" onclick="copyCode(this.dataset.code)" title="Copy code">
+            ${copied ? 'Copied!' : 'Copy'}
+          </button><code>${displayCode}</code></pre>`
+      }
+    )
+  }
+
   return (
     <div className={`msg-row ${isUser ? 'user' : 'assistant'}`}>
       <div className="msg-avatar">{isUser ? 'N' : '✦'}</div>
@@ -171,7 +241,7 @@ function Message({ msg }) {
             <div className="msg-text">{msg.text}</div>
           ) : (
             <div className="msg-text markdown">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.text || ''}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{withCopyButton(msg.text || '')}</ReactMarkdown>
             </div>
           )
         )}
@@ -239,10 +309,19 @@ export default function App() {
   const [messages, setMessages] = useState([])
   const [model, setModel] = useState(MODELS[0].id)
   const [busy, setBusy] = useState(false)
+  const [darkMode, setDarkMode] = useState(false)
   const endRef = useRef(null)
   // Id of a chat we just created while sending: its messages are already on screen,
   // so we must not reload them from the server (that wiped the AI reply).
   const justCreatedRef = useRef(null)
+
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark')
+    } else {
+      document.documentElement.classList.remove('dark')
+    }
+  }, [darkMode])
 
   useEffect(() => {
     if (!getToken()) {
@@ -351,13 +430,54 @@ export default function App() {
       .map((m) => ({ role: m.role, content: m.text }))
 
     try {
-      const reply = await askAI(history, model)
+      const res = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, messages: history }),
+      })
+
+      if (!res.ok) throw new Error('AI request failed')
+
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+
       setMessages((m) =>
         m.map((msg) =>
-          msg.id === loadingMsg.id ? { ...msg, loading: false, text: reply } : msg,
+          msg.id === loadingMsg.id ? { ...msg, loading: false } : msg,
         ),
       )
-      if (convId) await saveMessage(convId, 'assistant', reply)
+
+      let fullText = ''
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        const chunk = decoder.decode(value, { stream: true })
+        const lines = chunk.split('\n')
+
+        for (const line of lines) {
+          if (line.startsWith('')) {
+            const data = line.slice(6)
+            if (data === '[DONE]') break
+            try {
+              const parsed = JSON.parse(data)
+              const content = parsed.choices?.[0]?.delta?.content || ''
+              if (content) {
+                fullText += content
+                setMessages((m) =>
+                  m.map((msg) =>
+                    msg.id === loadingMsg.id ? { ...msg, loading: false, text: fullText } : msg,
+                  ),
+                )
+              }
+            } catch (e) {
+              // Ignore parse errors for partial chunks
+            }
+          }
+        }
+      }
+
+      if (convId) await saveMessage(convId, 'assistant', fullText)
     } catch {
       const errorText = 'Sorry, I could not reach the AI right now. Please try again.'
       setMessages((m) =>
@@ -379,6 +499,19 @@ export default function App() {
     setActiveId(null)
     setMessages([])
     setUser(null)
+  }
+
+  const deleteChat = async (id) => {
+    try {
+      await api(`/api/conversations?id=${id}`, { method: 'DELETE' })
+      setConversations((c) => c.filter((conv) => conv.id !== id))
+      if (activeId === id) {
+        setActiveId(null)
+        setMessages([])
+      }
+    } catch (err) {
+      console.error('Failed to delete conversation', err)
+    }
   }
 
   if (loadingAuth) {
@@ -406,6 +539,7 @@ export default function App() {
         onNew={newChat}
         user={user}
         onLogout={handleLogout}
+        onDelete={deleteChat}
       />
       <main className="chat">
         <div className="chat-scroll">
@@ -428,6 +562,9 @@ export default function App() {
         <div className="composer-wrap">
           <ModelPicker model={model} onChange={setModel} />
           <Composer onSend={send} busy={busy} />
+          <button className="theme-toggle" onClick={() => setDarkMode(!darkMode)}>
+            {darkMode ? '☀️' : '🌙'}
+          </button>
           <p className="disclaimer">Powered by Groq — replies may vary.</p>
         </div>
       </main>
