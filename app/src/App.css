@@ -188,6 +188,26 @@
   40% { opacity: 1; }
 }
 
+/* ---------- Model picker ---------- */
+.model-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.model-picker select {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+
 /* ---------- Composer ---------- */
 .composer-wrap {
   padding: 0 24px 16px;

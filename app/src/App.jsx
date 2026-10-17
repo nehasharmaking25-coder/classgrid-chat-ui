@@ -32,17 +32,25 @@ const SUGGESTIONS = [
   'Help me debug an error',
 ]
 
-// Free, no-key AI endpoint (OpenAI-compatible).
-const AI_URL = 'https://text.pollinations.ai/openai'
+// Groq API (OpenAI-compatible). Key is set as a Vercel env var (VITE_GROQ_API_KEY).
+const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY
+const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
 
-async function askAI(messages) {
-  const res = await fetch(AI_URL, {
+const MODELS = [
+  { id: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B (best)' },
+  { id: 'llama-3.1-8b-instant', label: 'Llama 3.1 8B (fast)' },
+  { id: 'mixtral-8x7b-32768', label: 'Mixtral 8x7B' },
+  { id: 'gemma2-9b-it', label: 'Gemma 2 9B' },
+]
+
+async function askAI(messages, model) {
+  const res = await fetch(GROQ_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'openai',
-      messages,
-    }),
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${GROQ_API_KEY}`,
+    },
+    body: JSON.stringify({ model, messages }),
   })
   if (!res.ok) throw new Error('AI request failed')
   const data = await res.json()
@@ -100,6 +108,25 @@ function Message({ msg }) {
   )
 }
 
+function ModelPicker({ model, onChange }) {
+  return (
+    <div className="model-picker">
+      <label htmlFor="model-select">Model</label>
+      <select
+        id="model-select"
+        value={model}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        {MODELS.map((m) => (
+          <option key={m.id} value={m.id}>
+            {m.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  )
+}
+
 function Composer({ onSend }) {
   const [value, setValue] = useState('')
   const ref = useRef(null)
@@ -140,6 +167,7 @@ export default function App() {
   const [conversations, setConversations] = useState(FAKE_CONVERSATIONS)
   const [activeId, setActiveId] = useState(1)
   const [messages, setMessages] = useState(FAKE_MESSAGES)
+  const [model, setModel] = useState(MODELS[0].id)
   const endRef = useRef(null)
 
   useEffect(() => {
@@ -157,7 +185,7 @@ export default function App() {
       .map((m) => ({ role: m.role, content: m.text }))
 
     try {
-      const reply = await askAI(history)
+      const reply = await askAI(history, model)
       setMessages((m) =>
         m.map((msg) =>
           msg.id === loadingMsg.id
@@ -214,8 +242,9 @@ export default function App() {
           <div ref={endRef} />
         </div>
         <div className="composer-wrap">
+          <ModelPicker model={model} onChange={setModel} />
           <Composer onSend={send} />
-          <p className="disclaimer">Powered by a free AI model — replies may vary.</p>
+          <p className="disclaimer">Powered by Groq — replies may vary.</p>
         </div>
       </main>
     </div>
