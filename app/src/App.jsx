@@ -188,6 +188,23 @@ function Sidebar({ conversations, activeId, onSelect, onNew, user, onLogout, onD
 
 function Message({ msg }) {
   const isUser = msg.role === 'user'
+  const [msgCopied, setMsgCopied] = useState(false)
+
+  const copyMessage = async () => {
+    const text = msg.text || ''
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      const ta = document.createElement('textarea')
+      ta.value = text
+      document.body.appendChild(ta)
+      ta.select()
+      document.execCommand('copy')
+      document.body.removeChild(ta)
+    }
+    setMsgCopied(true)
+    setTimeout(() => setMsgCopied(false), 1500)
+  }
 
   return (
     <div className={`msg-row ${isUser ? 'user' : 'assistant'}`}>
@@ -208,6 +225,11 @@ function Message({ msg }) {
               <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>{msg.text || ''}</ReactMarkdown>
             </div>
           )
+        )}
+        {!isUser && !msg.loading && msg.text && (
+          <button className={`msg-copy ${msgCopied ? 'copied' : ''}`} onClick={copyMessage}>
+            {msgCopied ? '✓ Copied!' : '📋 Copy'}
+          </button>
         )}
       </div>
     </div>

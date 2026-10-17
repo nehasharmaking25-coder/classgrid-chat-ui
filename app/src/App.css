@@ -654,3 +654,17 @@ html, body { overflow: hidden; }
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+/* Copy full message button */
+.msg-copy {
+  margin-top: 6px;
+  font-size: 12px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.msg-copy:hover { background: var(--hover); color: var(--text); }
+.msg-copy.copied { color: var(--accent); border-color: var(--accent); }
