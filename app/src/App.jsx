@@ -37,10 +37,10 @@ const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
 
 const MODELS = [
-  { id: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B (best)' },
-  { id: 'llama-3.1-8b-instant', label: 'Llama 3.1 8B (fast)' },
-  { id: 'mixtral-8x7b-32768', label: 'Mixtral 8x7B' },
-  { id: 'gemma2-9b-it', label: 'Gemma 2 9B' },
+  { id: 'openai/gpt-oss-120b', label: 'GPT-OSS 120B (best)' },
+  { id: 'openai/gpt-oss-20b', label: 'GPT-OSS 20B (fast)' },
+  { id: 'qwen/qwen3.8-27b', label: 'Qwen 3.8 27B' },
+  { id: 'allam-2-7b', label: 'Allam 2 7B' },
 ]
 
 async function askAI(messages, model) {
