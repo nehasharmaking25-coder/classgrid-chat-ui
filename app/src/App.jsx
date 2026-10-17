@@ -32,6 +32,23 @@ const SUGGESTIONS = [
   'Help me debug an error',
 ]
 
+// Free, no-key AI endpoint (OpenAI-compatible).
+const AI_URL = 'https://text.pollinations.ai/openai'
+
+async function askAI(messages) {
+  const res = await fetch(AI_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'openai',
+      messages,
+    }),
+  })
+  if (!res.ok) throw new Error('AI request failed')
+  const data = await res.json()
+  return data.choices?.[0]?.message?.content ?? 'Sorry, I got no reply.'
+}
+
 function Sidebar({ conversations, activeId, onSelect, onNew }) {
   return (
     <aside className="sidebar">
@@ -69,7 +86,15 @@ function Message({ msg }) {
       <div className="msg-avatar">{isUser ? 'N' : '✦'}</div>
       <div className="msg-body">
         <div className="msg-name">{isUser ? 'You' : 'Classgrid AI'}</div>
-        <div className="msg-text">{msg.text}</div>
+        {msg.loading ? (
+          <div className="msg-text typing">
+            <span className="dot" />
+            <span className="dot" />
+            <span className="dot" />
+          </div>
+        ) : (
+          <div className="msg-text">{msg.text}</div>
+        )}
       </div>
     </div>
   )
@@ -121,14 +146,38 @@ export default function App() {
     endRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  const send = (text) => {
+  const send = async (text) => {
     const userMsg = { id: Date.now(), role: 'user', text }
-    const reply = {
-      id: Date.now() + 1,
-      role: 'assistant',
-      text: 'This is a demo reply — the real app would call an AI API here. (Fake data only.)',
+    const loadingMsg = { id: Date.now() + 1, role: 'assistant', loading: true }
+    setMessages((m) => [...m, userMsg, loadingMsg])
+
+    // Build the conversation history for context.
+    const history = [...messages, userMsg]
+      .filter((m) => !m.loading)
+      .map((m) => ({ role: m.role, content: m.text }))
+
+    try {
+      const reply = await askAI(history)
+      setMessages((m) =>
+        m.map((msg) =>
+          msg.id === loadingMsg.id
+            ? { ...msg, loading: false, text: reply }
+            : msg,
+        ),
+      )
+    } catch {
+      setMessages((m) =>
+        m.map((msg) =>
+          msg.id === loadingMsg.id
+            ? {
+                ...msg,
+                loading: false,
+                text: 'Sorry, I could not reach the AI right now. Please try again.',
+              }
+            : msg,
+        ),
+      )
     }
-    setMessages((m) => [...m, userMsg, reply])
   }
 
   const newChat = () => {
@@ -166,7 +215,7 @@ export default function App() {
         </div>
         <div className="composer-wrap">
           <Composer onSend={send} />
-          <p className="disclaimer">Demo UI with fake data — no real API calls.</p>
+          <p className="disclaimer">Powered by a free AI model — replies may vary.</p>
         </div>
       </main>
     </div>
